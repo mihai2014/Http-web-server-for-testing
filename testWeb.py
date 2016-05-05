@@ -255,20 +255,27 @@ def do_GET(request,client):
     url = request.resource
 
     found = False
-    if(url == ""):
-        resource = "index.html"
-	result = readFile(resource)
-	if(result != None): found = True
-    elif(isThere(url)):
-	resource = getFunction(url)
-	if(resource != None): 
-	    found = True
-	    result = resource(request)
-    else:
-        resource = url
-	result = readFile(resource)
-	if(result != None): found = True
 
+    if (("." in url) or (url == "")):
+        if(url == ""):
+            resource = "index.html"
+            result = readFile(resource)
+	    if(result != None): found = True
+        else:
+            resource = url
+            result = readFile(resource)
+	    if(result != None) : found = True
+    else:
+        if(isThere(url)):
+            resource = getFunction(url)
+            if(resource != None):
+		found = True
+                result = resource(request)
+	else:
+	    found = False
+	    def noneFunction(): pass
+	    resource =  noneFunction	
+    	
     message = Message()
     message.header.add('Server','testWeb')
     message.header.add('Connection','closed')
