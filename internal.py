@@ -8,19 +8,19 @@ functionsList = [
 def do_something(request):
     msg = "Data posted was:<br>"
     fd = request.FormData
-    parts = fd.parts
-    for part in parts:
-	if "filename" in part:
-	    contentType = part['Content-Type']
-	    fileName = part['filename']
-	    file = part['data'] 
-	    #print fileName,contentType,len(file) 
-	    msg += ("fileName = %s, type = %s, size = %s bytes<br>") % (fileName,contentType,len(file))
+    postData = fd.read
+
+    for item in postData:
+	name 		= item["name"]
+	contentType 	= item["contentType"]
+	fileName 	= item["fileName"]
+	value 		= item["value"]
+
+	if(fileName == ""):
+	    msg += "name = %s value = %s<br>" % (name,value)
 	else:
-	    name = part['name']
-	    value = part['data']
-	    #print name, value 
-	    msg += ("%s = %s <br>") % (name,value)
+	    fileSize = len(value)
+	    msg += "fileName = %s type = %s fileSize = %s<br>" % (fileName,contentType,fileSize)
 
     response = "<html><body>" + msg + "<html><body>"
  

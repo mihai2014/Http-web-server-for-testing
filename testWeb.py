@@ -1,7 +1,7 @@
 from internal import *
 from clean import clean
 from http_codes import http_codes
-#import sys
+import sys
 from socket import *
 
 #clean port 8000 just in case
@@ -63,65 +63,122 @@ def recv_all(sock, length):
 
 class FormData:
     def __init__(self,data,boundary):
+	self.debug = False
 	self.data = data
 	self.boundary = boundary
 	self.parts = []
+	self.type = [] 
+	self.level = 0
+	self.read = []
 	self.load()
 
     def load(self):
-	list = self.data.split(self.boundary)
-	parts = list[1:len(list)-1]
-	#print "FD", parts
-	for part in parts:
-	    self.scan(part)
+	endLine = "\r\n"
+	endData= "\r\n--"
+	endForm = "--\r\n"
 
-    def watch(self,parameters,data):
-	part = {}
-	for item in parameters:
-	    params = item.split(";")
-	    for item in params:
-	        description = item.split(":")
-		#print description
-		if(len(description) > 1):
-		    name = description[0]
-		    value = description[1].replace(" ","")
-		    part[name] = value
-		else:
-		    description = description[0]
-		    name = description.split("=")[0].replace(" ","")  	#delete space
-		    value = description.split("=")[1]
-		    value = value[1:len(value)-1]  			#delete quotations
-		    part[name] = value
- 	part['data'] = data
-	self.parts.append(part)
+	strLine = ""
+	str1 = ""   # 2 chars accumulator
+	str2 = ""   # 4 chars accumulator
+	str3 = ""   # len(boundary) chars accumulator
+
+        for c in self.data:
+
+            strLine += c
+            str1 += c
+	    str2 += c
+	    str3 += c
+
+            if (len(str1) > 2):
+                str1 = str1[1:len(str1)]
+            if (len(str2) > 4):
+                str2 = str2[1:len(str2)]
+            if (len(str3) > len(self.boundary)):
+                str3 = str3[1:len(str3)]
+
+	    if(str1 == endLine):
+		#if(strLine != endLine): 
+		self.readLines("line",strLine)
+		strLine = ""
+	    if(str2 == endData):
+		self.readLines("endData")
+	    if(str2 == endForm):
+		self.readLines("endForm")
+	    if(str3 == self.boundary):
+		self.readLines("boundary")
+		strLine = ""
+
+    def setLevel(self):
+        if(self.level == 0):
+            self.level = 1
+        else:
+            self.level = 0
+
+    def readLines(self,type,data=None):
+	if(self.debug): 
+	    print type,
+	    if(data != None):
+		print data.replace("\r\n","CRLF")
+	    else:
+		print ""
+
+	if(type == "line"):
+	    if(data == "\r\n"):	
+		#1 = data description, 0 = data
+		self.setLevel()
+	    else:
+		data = data.replace("\r\n","")
+
+	#init
+        name = ""
+        filename = ""
+        contentType = ""
+	value = ""
+
+	if(data != "\r\n" and data != None and data != "--"):		
+	    if(self.level == 1):
+	        self.type.append(self.readDescription(data))
+	    if(self.level == 0):
+		for item in self.type:
+		    if(item[0] == "Content-Disposition"):
+			name = item[2]["name"]
+			if("filename" in item[2]):
+			    filename = item[2]["filename"]
+                    if(item[0] == "Content-Type"):
+                        contentType = item[1]
+
+		#print "name=%s filename=%s contentType=%s" % (name, filename, contentType)
+	        #print "value=%s" % (data)
+		self.read.append({'name':name,'fileName':filename,'contentType':contentType,'value':data})
+
+		#reset
+		self.type = []
+		name = ""
+		filename = ""
+		contentType = ""
+		value = ""
+
+    def readDescription(self,line):
+	variables = {}
+
+	string = line.split(":")
+	param = string[0]
+	attribs = string[1].split(";")
+	length = len(attribs)
+	#print param, attribs,range(length)
+
+	for n in range(length):
+	    if(n == 0):
+		dataType = attribs[n].replace(' ','')
+	    else:
+		attr = attribs[n].replace('"','')
+		attr = attr.replace(' ','')
+		attr = attr.split("=")
+		variables[attr[0]] = attr[1]
+
+	return[param, dataType, variables]
 	
-    def scan(self,part):
-	flagData = False
-	parameters = []
-	data = ""
-	state = 0
-	str = ''
-	for ch in part:
-	    if(ch != chr(13) and ch != chr(10)):
-		state = 0
-		str += ch
-	    if( state == 0 and ch ==chr(13) ): 
-		state = 1
-	    if( state == 1 and ch ==chr(10) ): 
-		state = 2
-		if(flagData):
-		    data = str
-		else:
-		    if(str != '') : parameters.append(str)
-		str = ""
-            if( state == 2 and ch ==chr(13) ):
-                state = 3
-            if( state == 3 and ch ==chr(10) ):
-                state = 0
-		flagData = True
-		str = ""
-	self.watch(parameters, data)
-
+	
 
 class Header:
     def __init__(self):
@@ -313,11 +370,11 @@ def do_GET(request,client):
 
     message.header.add('Content-Length',str(contentLength))
 
-    print request.firstLine + " " + str(code) + " " + state(code) + " " + str(contentLength)
+    #print request.firstLine + " " + str(code) + " " + state(code) + " " + str(contentLength)
 
-    print "HEADER start ==================================="
-    print request.header.read()
-    print "HEADER end ====================================="
+    #print "HEADER start ==================================="
+    #print request.header.read()
+    #print "HEADER end ====================================="
 
     send_all(client,message.read())
 
@@ -363,11 +420,11 @@ def do_POST(request,client):
     message.header.add('Content-Length',str(contentLength))
     message.body = msg 
 
-    print request.firstLine + " " + str(code) + " " + state(code) + " " + str(contentLength)
+    #print request.firstLine + " " + str(code) + " " + state(code) + " " + str(contentLength)
 
-    print "HEADER start ==================================="
-    print request.header.read()
-    print "HEADER end ====================================="
+    #print "HEADER start ==================================="
+    #print request.header.read()
+    #print "HEADER end ====================================="
 
     #client.send(message.read())
     send_all(client,message.read())
