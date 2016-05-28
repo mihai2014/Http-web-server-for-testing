@@ -1,7 +1,7 @@
 from internal import *
 from clean import clean
 from http_codes import http_codes
-import sys
+import sys, os
 from socket import *
 
 #clean port 8000 just in case
@@ -435,34 +435,53 @@ def do_Error(request,client,code,e):
 
     client.send(message.read())
 
+
+def reap():
+    """Try to collect zombie processes, if any."""
+    while 1:
+        try:
+            result = os.waitpid(-1, os.WNOHANG)
+            #if no zombies anymore, stop
+            if result[0] == 0: break
+            procList.remove(result[0])
+            print procList
+        except:
+            #no child processes
+            break
+        #print "Reaped child process %d" % result[0]
+
 methods = ['GET','POST'] 
+
+procList = []
 
 while(1):
     client, addr = s.accept()
 
-    request = process(client)
-    method = request.method
+    #collecting "zombie" processes
+    reap()
 
-    if(method == "GET"):
-        do_GET(request,client)
-    if(method == "POST"):
-        do_POST(request,client)
+    pid = os.fork()
 
+    if (pid == 0):
+        request = process(client)
+        method = request.method
 
-#    try:
-#        if(method == "GET"):
-#	    do_GET(request,client)
-#
-#        if(method == "POST"):
-#            do_POST(request,client)
+        try:
+            if(method == "GET"):
+                do_GET(request,client)
+            if(method == "POST"):
+                do_POST(request,client)
 
-#    except Exception as e:
-#	#internal server error
-#	do_Error(request,client,500,e)
+        except Exception as e:
+            #internal server error
+            do_Error(request,client,500,e)
 
-    if not(method in methods):
-	#not implemented
-	do_Error(request,client,501)
+        if not(method in methods):
+            #not implemented
+            do_Error(request,client,501)
 
+        os._exit(0)
+
+    procList.append(pid)
 
     client.close()
