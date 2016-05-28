@@ -364,9 +364,9 @@ def do_GET(request,client):
 
     #print request.firstLine + " " + str(code) + " " + state(code) + " " + str(contentLength)
 
-    #print "HEADER start ==================================="
-    #print request.header.read()
-    #print "HEADER end ====================================="
+    print "HEADER start ==================================="
+    print request.header.read()
+    print "HEADER end ====================================="
 
     send_all(client,message.read())
 
@@ -414,9 +414,9 @@ def do_POST(request,client):
 
     #print request.firstLine + " " + str(code) + " " + state(code) + " " + str(contentLength)
 
-    #print "HEADER start ==================================="
-    #print request.header.read()
-    #print "HEADER end ====================================="
+    print "HEADER start ==================================="
+    print request.header.read()
+    print "HEADER end ====================================="
 
     #client.send(message.read())
     send_all(client,message.read())
@@ -444,7 +444,7 @@ def reap():
             #if no zombies anymore, stop
             if result[0] == 0: break
             procList.remove(result[0])
-            print procList
+            #print procList
         except:
             #no child processes
             break
