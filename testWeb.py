@@ -66,7 +66,6 @@ class FormData:
 	self.debug = False
 	self.data = data
 	self.boundary = boundary
-	self.parts = []
 	self.type = [] 
 	self.level = 0
 	self.read = []
@@ -74,17 +73,18 @@ class FormData:
 
     def load(self):
 	endLine = "\r\n"
+	endDescription = "\r\n\r\n"
 	endData= "\r\n--"
 	endForm = "--\r\n"
 
-	strLine = ""
+	strData = ""
 	str1 = ""   # 2 chars accumulator
 	str2 = ""   # 4 chars accumulator
 	str3 = ""   # len(boundary) chars accumulator
 
         for c in self.data:
 
-            strLine += c
+            strData += c
             str1 += c
 	    str2 += c
 	    str3 += c
@@ -96,67 +96,60 @@ class FormData:
             if (len(str3) > len(self.boundary)):
                 str3 = str3[1:len(str3)]
 
-	    if(str1 == endLine):
-		#if(strLine != endLine): 
-		self.readLines("line",strLine)
-		strLine = ""
-	    if(str2 == endData):
-		self.readLines("endData")
-	    if(str2 == endForm):
-		self.readLines("endForm")
-	    if(str3 == self.boundary):
-		self.readLines("boundary")
-		strLine = ""
 
-    def setLevel(self):
-        if(self.level == 0):
-            self.level = 1
-        else:
-            self.level = 0
+	    if(str3 == self.boundary):			
+		self.level = 1  # boundary
+		strData = ""
+	    elif(str1 == endLine and self.level == 1):	
+		self.level = 2  # begin description
+		strData = ""
+	    elif(self.level == 2 and str2 == endDescription):
+		self.level = 3  # end description, begin data
+		self.processData("description",strData[0:len(strData)-4]) #without last ending chars: endDescription
+		strData = ""
+	    elif(self.level == 3 and str2 == endData):
+		self.level = 0  # end data, reset
+		self.processData("data",strData[0:len(strData)-4]) #without last ending chars: endData
+		strData = ""
 
-    def readLines(self,type,data=None):
-	if(self.debug): 
-	    print type,
-	    if(data != None):
-		print data.replace("\r\n","CRLF")
-	    else:
-		print ""
 
-	if(type == "line"):
-	    if(data == "\r\n"):	
-		#1 = data description, 0 = data
-		self.setLevel()
-	    else:
-		data = data.replace("\r\n","")
+    def processData(self,type,data=None):
+        if(self.debug):
+            print type,
+            if(data != None):
+                print data.replace("\r\n","CRLF")
+            else:
+                print ""
 
-	#init
-        name = ""
-        filename = ""
-        contentType = ""
-	value = ""
 
-	if(data != "\r\n" and data != None and data != "--"):		
-	    if(self.level == 1):
-	        self.type.append(self.readDescription(data))
-	    if(self.level == 0):
-		for item in self.type:
-		    if(item[0] == "Content-Disposition"):
-			name = item[2]["name"]
-			if("filename" in item[2]):
-			    filename = item[2]["filename"]
-                    if(item[0] == "Content-Type"):
-                        contentType = item[1]
+	if(type == "description"):
+	    description = data.split("\r\n")
+	    for item in description:
+		self.type.append(self.readDescription(item))
 
-		#print "name=%s filename=%s contentType=%s" % (name, filename, contentType)
-	        #print "value=%s" % (data)
-		self.read.append({'name':name,'fileName':filename,'contentType':contentType,'value':data})
+	if(type == "data"):
+	    #init
+            filename = ""
+            contentType = ""
+            value = ""
 
-		#reset
-		self.type = []
-		name = ""
-		filename = ""
-		contentType = ""
-		value = ""
+            for item in self.type:
+                if(item[0] == "Content-Disposition"):
+                    name = item[2]["name"]
+                    if("filename" in item[2]):
+                        filename = item[2]["filename"]
+                if(item[0] == "Content-Type"):
+                    contentType = item[1]
+
+            #print "name=%s filename=%s contentType=%s" % (name, filename, contentType)
+            #print "value=%s" % (data)
+            self.read.append({'name':name,'fileName':filename,'contentType':contentType,'value':data})
+
+	    #reset
+	    self.type = []
+            filename = ""
+            contentType = ""
+            value = ""
 
     def readDescription(self,line):
 	variables = {}
@@ -165,7 +158,6 @@ class FormData:
 	param = string[0]
 	attribs = string[1].split(";")
 	length = len(attribs)
-	#print param, attribs,range(length)
 
 	for n in range(length):
 	    if(n == 0):
@@ -451,21 +443,26 @@ while(1):
     request = process(client)
     method = request.method
 
-    try:
-        if(method == "GET"):
-	    do_GET(request,client)
+    if(method == "GET"):
+        do_GET(request,client)
+    if(method == "POST"):
+        do_POST(request,client)
 
-        if(method == "POST"):
-            do_POST(request,client)
 
-    except Exception as e:
-	#internal server error
-	do_Error(request,client,500,e)
+#    try:
+#        if(method == "GET"):
+#	    do_GET(request,client)
+#
+#        if(method == "POST"):
+#            do_POST(request,client)
+
+#    except Exception as e:
+#	#internal server error
+#	do_Error(request,client,500,e)
 
     if not(method in methods):
 	#not implemented
 	do_Error(request,client,501)
 
-#    client.send("Acknowledge!\n")
 
     client.close()

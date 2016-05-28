@@ -5,3 +5,5 @@
 3. POST message request, including body is written always in post_log.txt
 4. Accept only GET and POST requests
 5. Tested on linux only
+
+Note: do_something example procedure defined in internal.py and invoked in index.html is writing posted files in directory documents
